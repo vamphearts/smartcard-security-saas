@@ -38,12 +38,8 @@ kubectl port-forward -n smartcard-security pod/smartcard-security-pod 8080:80
 
 | Файл | Назначение |
 |------|------------|
-| `docs/01_TZ.docx` | Техническое задание (Word) |
 | `docs/02_OTCHET.docx` | Отчёт (Word) |
-| `docs/03_PREZENTACIYA.docx` | Презентация — перенести в PowerPoint |
-| `docs/05_CHTO_SDELAT_SAMOMU.md` | **Чеклист: что доделать вам** |
 
-> Если Docker не стартует: на диске мало места (`df -h`). Нужно ~5–10 ГБ, затем `docker system prune -a`.
 
 ## Структура
 
