@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart-card Security SaaS — вариант 216</title>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #e2e8f0; --muted: #94a3b8; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }
+    h1, h2 { color: var(--accent); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border-radius: 12px; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #334155; padding: 8px; text-align: left; }
+    th { color: var(--muted); }
+    input, button { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: var(--text); }
+    button { background: var(--accent); color: #0f172a; border: none; cursor: pointer; font-weight: 600; }
+    button:hover { opacity: 0.9; }
+    .chart img { max-width: 100%; border-radius: 8px; margin-top: 12px; }
+    #results { display: none; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .ok { background: #166534; }
+    .block { background: #991b1b; }
+    header { margin-bottom: 24px; }
+    header p { color: var(--muted); margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Контейнер безопасности Smart-card SaaS</h1>
+    <p>Финансовый университет · ИД23-1 · Курбанов Умар Рашидович · Вариант 216</p>
+    <p>УБИ: несанкционированный доступ к приложению на Smart-карте</p>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Проверка доступа (Security Container)</h2>
+      <form id="accessForm">
+        <p><label>Card ID <input name="card_id" value="SC-10042" required></label></p>
+        <p><label>Session ID <input name="session_id" value="sess-demo-001" required></label></p>
+        <p><label>Failed PIN <input name="failed_pin_count" type="number" value="0" min="0"></label></p>
+        <p><label>Requests/min <input name="requests_per_min" type="number" value="5" min="0"></label></p>
+        <button type="submit">Запросить доступ</button>
+      </form>
+      <pre id="accessResult" style="margin-top:12px;background:#0f172a;padding:12px;border-radius:8px;"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Интеллектуальная обработка (ML)</h2>
+      <form id="analyzeForm" enctype="multipart/form-data">
+        <p><input type="file" name="file" accept=".csv" required></p>
+        <button type="submit">Анализ CSV (Isolation Forest)</button>
+      </form>
+      <div id="results">
+        <h3>Сводка</h3>
+        <pre id="summary"></pre>
+        <h3>Топ подозрительных сессий</h3>
+        <div id="tableWrap"></div>
+        <div class="chart" id="charts"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:20px">
+    <h2>Журнал аудита (последние записи)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Session</th><th>Card</th><th>PIN fail</th><th>RPM</th>
+          <th>Access</th><th>Label</th><th>Decision</th><th>Score</th>
+        </tr>
+      </thead>
+      <tbody id="auditBody">
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.id }}</td>
+          <td>{{ log.session_id }}</td>
+          <td>{{ log.card_id }}</td>
+          <td>{{ log.failed_pin_count }}</td>
+          <td>{{ log.requests_per_min }}</td>
+          <td>
+            <span class="badge {{ 'ok' if log.access_granted else 'block' }}">
+              {{ 'OK' if log.access_granted else 'BLOCK' }}
+            </span>
+          </td>
+          <td>{{ log.label }}</td>
+          <td>{{ log.decision or '-' }}</td>
+          <td>{{ '%.3f'|format(log.anomaly_score) if log.anomaly_score is not none else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <script>
+    document.getElementById('accessForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      body.failed_pin_count = +body.failed_pin_count;
+      body.requests_per_min = +body.requests_per_min;
+      const res = await fetch('/api/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      document.getElementById('accessResult').textContent = JSON.stringify(await res.json(), null, 2);
+      await refreshAuditLog();
+    };
+
+    async function refreshAuditLog() {
+      const res = await fetch('/api/logs');
+      const logs = await res.json();
+      const tbody = document.getElementById('auditBody');
+      if (!tbody) return;
+      tbody.innerHTML = logs.map(log => `
+        <tr>
+          <td>${log.id}</td>
+          <td>${log.session_id}</td>
+          <td>${log.card_id}</td>
+          <td>${log.failed_pin_count}</td>
+          <td>${log.requests_per_min}</td>
+          <td><span class="badge ${log.access_granted ? 'ok' : 'block'}">${log.access_granted ? 'OK' : 'BLOCK'}</span></td>
+          <td>${log.label}</td>
+          <td>${log.decision || '-'}</td>
+          <td>${log.anomaly_score != null ? log.anomaly_score.toFixed(3) : '-'}</td>
+        </tr>`).join('');
+    }
+
+    document.getElementById('analyzeForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = 'Анализ...';
+      try {
+        const fd = new FormData(e.target);
+        const res = await fetch('/api/analyze', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        document.getElementById('results').style.display = 'block';
+        document.getElementById('summary').textContent = JSON.stringify(data.summary, null, 2);
+        const rows = data.table.map(r => `<tr>
+          <td>${r.session_id}</td><td>${r.card_id}</td>
+          <td>${r.failed_pin_count}</td><td>${r.requests_per_min}</td>
+          <td>${r.anomaly_score?.toFixed(3)}</td><td>${r.ml_decision}</td>
+          <td>${r.label || '-'}</td></tr>`).join('');
+        document.getElementById('tableWrap').innerHTML = `<table><thead><tr>
+          <th>Session</th><th>Card</th><th>PIN</th><th>RPM</th><th>Score</th><th>ML</th><th>Label</th>
+        </tr></thead><tbody>${rows}</tbody></table>`;
+        document.getElementById('charts').innerHTML = `
+          <h3>Визуализация</h3>
+          <img src="data:image/png;base64,${data.charts.histogram}" alt="histogram">
+          <img src="data:image/png;base64,${data.charts.scatter}" alt="scatter">
+          <img src="data:image/png;base64,${data.charts.pie}" alt="pie">
+        `;
+        document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        await refreshAuditLog();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Анализ CSV (Isolation Forest)';
+      }
+    };
+  </script>
+</body>
+</html>
